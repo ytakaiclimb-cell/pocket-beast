@@ -84,23 +84,27 @@ function act(atk: Side, def: Side, log: string[]) {
   }
 
   let dmg: number;
-  if (atk.move === "special") {
+  const special = atk.move === "special";
+  if (special) {
     atk.gauge -= 60;
     dmg = best(atk.snap) * 1.3 + atk.snap.pw * 0.6 - defv * 0.18;
-    log.push(`${an}の ひっさつ！`);
   } else {
     atk.gauge = Math.min(100, atk.gauge + 12);
     dmg = atk.snap.pw * 0.85 + Math.random() * atk.snap.pw * 0.35 - defv * 0.35;
   }
 
-  if (atk.focused) { dmg *= 1.8; atk.focused = false; log.push(`${an}の ためた いちげき！`); }
+  let charged = false;
+  if (atk.focused) { dmg *= 1.8; atk.focused = false; charged = true; }
 
   const crit = Math.random() < 0.05 + atk.snap.iq / 2200;
   if (crit) dmg *= 1.7;
 
   const d = Math.max(1, Math.round(dmg));
   def.hp = Math.max(0, def.hp - d);
-  log.push(`${an}の こうげき！${crit ? " かいしん！" : ""} ${d} ダメージ`);
+
+  const what = special ? "ひっさつ" : "こうげき";
+  const kamae = charged ? "ためた " : "";
+  log.push(`${an}の ${kamae}${what}！${crit ? " かいしん！" : ""} ${d} ダメージ`);
 }
 
 /* ---------- 本体 ---------- */
