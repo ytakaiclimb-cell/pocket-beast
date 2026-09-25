@@ -1499,6 +1499,14 @@ function start(){
 }
 
 start();
+
+// ホーム画面に「アプリ」として入れられるようにする。
+// これが無いと Chrome のメニューに インストール が出ない。
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
