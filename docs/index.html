@@ -828,7 +828,25 @@ async function connect(){
     sb = window.supabase.createClient(SB_URL, SB_KEY, {
       auth:{ persistSession:true, autoRefreshToken:true, storageKey:'pocketbeast.auth' },
     });
-    let { data:{ session } } = await sb.auth.getSession();
+    let session = null;
+    try{
+      const r = await sb.auth.getSession();
+      if(!r.error) session = r.data.session;
+    }catch(e){ session = null; }
+
+    // 保存されていたログインが もう使えないことがある
+    // （しばらく開かなかった / サーバ側でユーザーが消えた）。
+    // そのときは だまって入りなおす。
+    if(session){
+      try{
+        const { error } = await sb.auth.getUser();
+        if(error) session = null;
+      }catch(e){ session = null; }
+      if(!session){
+        try{ await sb.auth.signOut({ scope:'local' }); }catch(e){}
+      }
+    }
+
     if(!session){
       const { data, error } = await sb.auth.signInAnonymously();
       if(error) throw error;
