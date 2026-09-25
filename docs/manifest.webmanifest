@@ -1,0 +1,17 @@
+{
+  "name": "ポケットビースト",
+  "short_name": "ビースト",
+  "description": "ドット絵のモンスター育成アプリ。閉じている間も時間が進み、ほかの人とリアルタイムで対戦できる。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E111A",
+  "theme_color": "#262C3C",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

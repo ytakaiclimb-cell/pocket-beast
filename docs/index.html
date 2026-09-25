@@ -1,0 +1,1504 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="ドット絵のモンスター育成アプリ。閉じている間も時間が進み、世話の仕方で進化先が変わる。ほかの人とリアルタイムで対戦できる。">
+<meta name="theme-color" content="#262C3C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ポケットビースト">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<title>ポケットビースト</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box}
+html{color-scheme:light}
+img{max-width:100%}
+[hidden]{display:none!important}
+:root{
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:root{
+  --bg:#E6E8EC; --ink:#1B1E28; --muted:#5A6070; --panel:#FFFFFF; --line:#C8CCD6;
+  --shell:#262C3C; --shell-hi:#39415A; --shell-lo:#171B27;
+  --amber:#D98520; --amber-on:#2A1A04;
+  --lcd:#C3D46B; --lcd-2:#B4C65C; --lcd-ink:#2B3316; --lcd-dim:#8C9C4A;
+  --good:#3F9E5C; --warn:#C9901E; --bad:#C74A3A;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E111A; --ink:#E7EAF2; --muted:#949BAE; --panel:#161A25; --line:#2C3244;
+    --shell:#1A1F2C; --shell-hi:#2B3348; --shell-lo:#0C0F17;
+    --amber:#F2A33C; --amber-on:#231603;
+    --good:#5FBF7A; --warn:#E8B33C; --bad:#E0604F;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E111A; --ink:#E7EAF2; --muted:#949BAE; --panel:#161A25; --line:#2C3244;
+  --shell:#1A1F2C; --shell-hi:#2B3348; --shell-lo:#0C0F17;
+  --amber:#F2A33C; --amber-on:#231603;
+  --good:#5FBF7A; --warn:#E8B33C; --bad:#E0604F;
+}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  font-size:14px; line-height:1.6; -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:430px; margin:0 auto; padding:14px 16px 28px; display:flex; flex-direction:column; gap:12px}
+.pix{font-family:"DotGothic16","Zen Kaku Gothic New",monospace; font-weight:400; letter-spacing:.02em}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---- 筐体 ---- */
+.device{
+  background:linear-gradient(175deg,var(--shell-hi),var(--shell) 22%,var(--shell-lo));
+  border-radius:20px; padding:14px; box-shadow:0 10px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.brand{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 2px 10px}
+.brand b{font-family:"DotGothic16",monospace; font-size:15px; color:#F0F2F8; font-weight:400; letter-spacing:.08em}
+.brand .gen{font-family:"DotGothic16",monospace; font-size:12px; color:var(--amber)}
+.screen{position:relative; background:var(--lcd-ink); border-radius:12px; padding:6px; box-shadow:inset 0 2px 8px rgba(0,0,0,.6)}
+canvas{display:block; width:100%; max-width:100%; aspect-ratio:4/3; image-rendering:pixelated; border-radius:6px}
+.ticker{
+  position:absolute; left:10px; right:10px; bottom:10px; background:rgba(43,51,22,.86); color:var(--lcd);
+  font-family:"DotGothic16",monospace; font-size:12px; padding:4px 8px; border-radius:4px;
+  opacity:0; transition:opacity .2s;
+}
+.ticker.on{opacity:1}
+
+/* ---- メーター ---- */
+.meters{display:grid; grid-template-columns:1fr 1fr; gap:7px 12px; margin-top:12px}
+.m{display:flex; align-items:center; gap:6px; min-width:0}
+.m span{font-family:"DotGothic16",monospace; font-size:10.5px; color:#AEB6C8; width:4.8em; flex:none; white-space:nowrap; line-height:1.2}
+.bar{flex:1; height:9px; background:var(--shell-lo); border-radius:99px; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+.bar i{display:block; height:100%; border-radius:99px; background:var(--good); transition:width .35s ease}
+.bar i.w{background:var(--warn)} .bar i.b{background:var(--bad)}
+
+/* ---- ボタン ---- */
+.pad{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:14px}
+button{font-family:inherit; font-size:inherit; cursor:pointer}
+.key{
+  appearance:none; border:0; border-radius:12px; padding:9px 2px 8px;
+  background:linear-gradient(#4A5473,#333B52); color:#EDF0F7;
+  box-shadow:0 3px 0 #1E2433, inset 0 1px 0 rgba(255,255,255,.14);
+  display:flex; flex-direction:column; align-items:center; gap:3px; transition:transform .06s, box-shadow .06s;
+}
+.key:active{transform:translateY(3px); box-shadow:0 0 0 #1E2433, inset 0 1px 0 rgba(255,255,255,.14)}
+.key .ic{font-size:17px; line-height:1}
+.key .lb{font-family:"DotGothic16",monospace; font-size:11px}
+.key[disabled]{opacity:.38; box-shadow:0 3px 0 #1E2433; cursor:default}
+.key.hot{background:linear-gradient(#E0A44A,#C07B1C); color:#2A1A04; box-shadow:0 3px 0 #6E4409, inset 0 1px 0 rgba(255,255,255,.3)}
+
+/* ---- タブ ---- */
+.tabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  appearance:none; border:1px solid var(--line); background:var(--panel); color:var(--muted);
+  font-family:"DotGothic16",monospace; font-size:13px; padding:6px 12px; border-radius:99px; white-space:nowrap;
+}
+.tab[aria-selected="true"]{background:var(--ink); color:var(--bg); border-color:var(--ink)}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px}
+.card h2{font-family:"DotGothic16",monospace; font-size:14px; margin:0 0 10px; font-weight:400; letter-spacing:.06em; color:var(--muted)}
+.card h3{font-family:"DotGothic16",monospace; font-size:13px; margin:16px 0 8px; font-weight:400; color:var(--muted)}
+.card h3:first-child{margin-top:0}
+
+/* ---- ステータス表 ---- */
+.stats{display:flex; flex-direction:column; gap:9px}
+.st{display:grid; grid-template-columns:4.2em 1fr 3.2em; align-items:center; gap:10px}
+.st b{font-family:"DotGothic16",monospace; font-weight:400; font-size:13px}
+.st .track{height:12px; background:var(--bg); border:1px solid var(--line); border-radius:3px; overflow:hidden}
+.st .track i{display:block; height:100%; background:var(--amber)}
+.st .v{text-align:right; font-variant-numeric:tabular-nums; font-family:"DotGothic16",monospace; font-size:14px}
+.kv{display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px dashed var(--line); font-size:13px}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted)}
+.kv b{font-weight:500; font-variant-numeric:tabular-nums}
+
+/* ---- 汎用 ---- */
+.row{display:flex; gap:8px; flex-wrap:wrap}
+.btn{
+  appearance:none; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+  border-radius:8px; padding:9px 14px; font-family:"DotGothic16",monospace; font-size:13px;
+}
+.btn.p{background:var(--amber); border-color:var(--amber); color:var(--amber-on)}
+.btn[disabled]{opacity:.4; cursor:default}
+.note{color:var(--muted); font-size:12.5px; margin:8px 0 0}
+.txt{width:100%; box-sizing:border-box; font-family:"DotGothic16",monospace; font-size:19px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink)}
+.txt:focus{outline:2px solid var(--amber); outline-offset:1px}
+.npv{width:72px; height:72px; aspect-ratio:1; background:var(--lcd); border-radius:8px; display:block; margin:0 auto 12px}
+.pill{display:inline-block; font-family:"DotGothic16",monospace; font-size:11px; padding:2px 8px; border-radius:99px; background:var(--bg); border:1px solid var(--line); color:var(--muted)}
+.pill.g{color:var(--good); border-color:currentColor} .pill.w{color:var(--warn); border-color:currentColor} .pill.b{color:var(--bad); border-color:currentColor}
+.log{font-size:12.5px; line-height:1.75; max-height:220px; overflow-y:auto; margin:0; padding:0; list-style:none}
+.log li{padding:3px 0; border-bottom:1px dashed var(--line)}
+.log li:last-child{border-bottom:0}
+.log .t{color:var(--muted); font-variant-numeric:tabular-nums; margin-right:6px}
+ol.steps{margin:0; padding-left:1.3em} ol.steps li{margin-bottom:7px}
+
+/* ---- 対戦 ---- */
+.foe{display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:var(--r); padding:10px; background:var(--bg)}
+.foe canvas{width:52px; height:52px; aspect-ratio:1; flex:none; background:var(--lcd); border-radius:6px}
+.foe .fi{flex:1; min-width:0}
+.foe .fn{font-family:"DotGothic16",monospace; font-size:14px}
+.foe .fd{font-size:12px; color:var(--muted)}
+.bl{display:flex; flex-direction:column; gap:4px; font-size:13px; font-family:"DotGothic16",monospace; min-height:140px}
+.hpbar{height:10px; background:var(--bg); border:1px solid var(--line); border-radius:99px; overflow:hidden}
+.hpbar i{display:block; height:100%; background:var(--good); transition:width .3s}
+.hpbar i.w{background:var(--warn)} .hpbar i.b{background:var(--bad)}
+
+/* ---- モーダル ---- */
+.modal{position:fixed; inset:0; background:rgba(8,10,16,.72); display:flex; align-items:center; justify-content:center; padding:20px; z-index:20}
+.modal .card{max-width:360px; width:100%; max-height:80vh; overflow-y:auto}
+/* ---- 対戦 ---- */
+.gauge{height:5px; background:var(--bg); border:1px solid var(--line); border-top:0; border-radius:0 0 3px 3px; overflow:hidden}
+.gauge i{display:block; height:100%; background:var(--amber); transition:width .3s}
+.moves{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px}
+.moves .btn{display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; padding:10px 12px}
+.moves .btn b{font-weight:400; font-size:14px}
+.moves .btn small{font-family:"Zen Kaku Gothic New",sans-serif; font-size:11px; opacity:.75; line-height:1.4}
+.mini{appearance:none; border:1px solid var(--line); background:var(--bg); color:var(--muted);
+  font-family:"DotGothic16",monospace; font-size:11px; padding:2px 8px; border-radius:99px; margin-left:6px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="device">
+    <div class="brand"><b>POCKET BEAST</b><span class="gen pix" id="genLabel">だい1せだい</span></div>
+    <div class="screen">
+      <canvas id="lcd" width="160" height="120" aria-label="そだてているモンスターのがめん"></canvas>
+      <div class="ticker pix" id="ticker"></div>
+    </div>
+    <div class="meters">
+      <div class="m"><span>はらぺこ</span><div class="bar"><i id="mHunger"></i></div></div>
+      <div class="m"><span>ごきげん</span><div class="bar"><i id="mHappy"></i></div></div>
+      <div class="m"><span>たいりょく</span><div class="bar"><i id="mStam"></i></div></div>
+      <div class="m"><span>きれい</span><div class="bar"><i id="mClean"></i></div></div>
+    </div>
+    <div class="pad">
+      <button class="key" id="bFeed"><span class="ic">🍚</span><span class="lb">ごはん</span></button>
+      <button class="key" id="bSnack"><span class="ic">🍡</span><span class="lb">おやつ</span></button>
+      <button class="key" id="bPlay"><span class="ic">🎈</span><span class="lb">あそぶ</span></button>
+      <button class="key" id="bClean"><span class="ic">🧹</span><span class="lb">そうじ</span></button>
+      <button class="key" id="bMed"><span class="ic">💊</span><span class="lb">くすり</span></button>
+      <button class="key" id="bScold"><span class="ic">⚡</span><span class="lb">しかる</span></button>
+      <button class="key" id="bLight"><span class="ic">💡</span><span class="lb">でんき</span></button>
+      <button class="key" id="bTrain"><span class="ic">🏋</span><span class="lb">きたえる</span></button>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-p="status" aria-selected="true">ステータス</button>
+    <button class="tab" role="tab" data-p="train" aria-selected="false">きたえる</button>
+    <button class="tab" role="tab" data-p="battle" aria-selected="false">たいせん（オンライン）</button>
+    <button class="tab" role="tab" data-p="book" aria-selected="false">きろく</button>
+    <button class="tab" role="tab" data-p="help" aria-selected="false">つかいかた</button>
+  </div>
+
+  <section class="card" id="p-status">
+    <h2 id="stName">—</h2>
+    <div class="stats" id="stBars"></div>
+    <h3>プロフィール</h3>
+    <div id="stInfo"></div>
+  </section>
+
+  <section class="card" id="p-train" hidden>
+    <h2>トレーニング</h2>
+    <p class="note" style="margin-top:0">たいりょくを つかって パラメータを のばす。つかれが たまると のびが わるくなる。</p>
+    <div class="row" id="trainRow" style="margin-top:10px"></div>
+    <div id="trainOut" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card" id="p-battle" hidden>
+    <h2>たいせん</h2>
+    <div id="battleBody"><p class="note" style="margin:0">サーバに つないでいます…</p></div>
+  </section>
+
+  <section class="card" id="p-book" hidden>
+    <h2>きろく</h2>
+    <h3>できごと</h3>
+    <ul class="log" id="logList"></ul>
+    <h3>でんどういり</h3>
+    <div id="hof"></div>
+    <h3>ずかん</h3>
+    <div id="dex"></div>
+    <h3>データ</h3>
+    <div class="row" style="margin-top:8px"><button class="btn" id="bReset">さいしょから やりなおす</button></div>
+    <p class="note" id="saveNote"></p>
+  </section>
+
+  <section class="card" id="p-help" hidden>
+    <h2>ホームがめんに おく</h2>
+    <p class="note" style="margin-top:0">このページを ホーム画面に 追加すると、ふつうのアプリと おなじように アイコンから ひらけます。</p>
+    <h3>Android（Chrome）</h3>
+    <ol class="steps">
+      <li>画面の みぎうえ「︙」を おす</li>
+      <li>「ホーム画面に追加」を えらぶ</li>
+      <li>なまえを かくにんして「追加」</li>
+    </ol>
+    <h3>iPhone（Safari）</h3>
+    <ol class="steps">
+      <li>下の まんなか「共有」ボタン（□に↑）を おす</li>
+      <li>メニューを 下に スクロールして「ホーム画面に追加」</li>
+      <li>右上の「追加」を おす</li>
+    </ol>
+    <h3>あそびかた</h3>
+    <ul style="margin:0; padding-left:1.2em">
+      <li><b>アプリを とじていても 時間は すすむ</b>。ひらいたとき、留守のあいだの ぶんが まとめて 計算される。</li>
+      <li>はらぺこ・ごきげんが <b>0 のまま ほうっておく</b>、<b>ウンチを そのままにする</b>、<b>夜に でんきを つけっぱなし</b> にすると「おせわミス」が たまる。</li>
+      <li>おせわミスと パラメータの かたよりで <b>進化さきが かわる</b>。寿命も みじかくなる。</li>
+      <li>夜 22時〜朝 7時は ねむくなる。でんきを けすと ねて、たいりょくが まわふくする。</li>
+      <li>寿命が くると 世代交代。つぎの タマゴは 前の世代の パラメータを すこし ひきつぐ。</li>
+    </ul>
+    <h3>たいせん</h3>
+    <ul style="margin:0; padding-left:1.2em">
+      <li>「たいせん」タブで <b>モンスターを とうろく</b> すると、ほかの人と たたかえる。
+          そだてた ぶんを はんえいするには、そのつど「とうろくを こうしん」を おす。</li>
+      <li><b>ぼしゅうを だして まつ</b>か、<b>だれかの ぼしゅうに のる</b>と はじまる。
+          相手も 同時に 操作するので、両方が アプリを 開いている 必要がある。</li>
+      <li>手は4つ。<b>こうげき</b>／<b>ぼうぎょ</b>（まもり2.2ばい・ゲージ+25）／
+          <b>ためる</b>（つぎの一撃1.8ばい・そのターンは もろい）／
+          <b>ひっさつ</b>（ゲージ60を つかう・大ダメージ）。</li>
+      <li><b>1ターン 20びょう</b>。えらばないと こうげき あつかいに なる。</li>
+      <li>勝敗は サーバが 決める。だれかが アプリを いじっても、結果は 変えられない。</li>
+      <li>たいせんには たいりょくを 25 つかう。ねているとき・びょうきのときは できない。</li>
+    </ul>
+
+    <h3>ほぞん</h3>
+    <p class="note" id="helpSave"></p>
+  </section>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   ポケットビースト — たまごっち / デジモン / モンスターファーム の系譜
+   ============================================================ */
+const MIN=60000, HOUR=3600000, DAY=86400000;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const ri=(n)=>Math.floor(Math.random()*n);
+const rf=()=>Math.random();
+
+/* ---------- ドット絵（16x16 / '.'は透明） ---------- */
+const P=(rows)=>rows.map(r=>r.padEnd(16,'.'));
+const SPR={
+egg:{pal:{1:'#F2E7C9',2:'#B9A473',3:'#E0605A'},map:P([
+'................',
+'.....222222.....',
+'...2211111122...',
+'..221111111122..',
+'.22111111111122.',
+'.21111331111112.',
+'2211133331111122',
+'2111133331111112',
+'2111113311111112',
+'2111111111111112',
+'2211111111111122',
+'.22111111111122.',
+'..221111111122..',
+'...2211111122...',
+'.....222222.....',
+'................'])},
+
+puchi:{pal:{1:'#7FD4E8',2:'#2C5C7A',3:'#16232E',4:'#F07E8E'},eyes:[[5,7],[6,7],[9,7],[10,7],[5,8],[6,8],[9,8],[10,8]],map:P([
+'................',
+'................',
+'................',
+'......2222......',
+'....22111122....',
+'...2211111122...',
+'..221111111122..',
+'..211331133112..',
+'..211331133112..',
+'..211111111112..',
+'..211144411112..',
+'..221111111122..',
+'...2211111122...',
+'....22222222....',
+'....22....22....',
+'...222....222...'])},
+
+moko:{pal:{1:'#F6E3A8',2:'#8A6A35',3:'#2A2015',4:'#E88C5A'},eyes:[[4,7],[5,7],[10,7],[11,7],[4,8],[5,8],[10,8],[11,8]],map:P([
+'................',
+'.......22.......',
+'......2112......',
+'.....211112.....',
+'...2211111122...',
+'..221111111122..',
+'.22111111111122.',
+'.21133111133112.',
+'.21133111133112.',
+'.21111144111112.',
+'.22111111111122.',
+'..221111111122..',
+'...2211111122...',
+'....22222222....',
+'....22....22....',
+'...222....222...'])},
+
+toge:{pal:{1:'#9B7BD4',2:'#3B2A5C',3:'#1B1030'},eyes:[[3,7],[4,7],[11,7],[12,7],[3,8],[4,8],[11,8],[12,8]],map:P([
+'................',
+'..2....22....2..',
+'.212..2112..212.',
+'.212.211112.212.',
+'...2211111122...',
+'..221111111122..',
+'.22111111111122.',
+'.21331111113312.',
+'.21331111113312.',
+'.21111333311112.',
+'.22111111111122.',
+'..221111111122..',
+'...2211111122...',
+'....22222222....',
+'...22......22...',
+'..222......222..'])},
+
+garudo:{pal:{1:'#E8654F',2:'#5C1E1A',3:'#1B0D0B',4:'#F5D06B',5:'#F2A33C'},eyes:[[4,5],[5,5],[10,5],[11,5],[4,6],[5,6],[10,6],[11,6]],map:P([
+'................',
+'..22........22..',
+'..212......212..',
+'..221111111122..',
+'.22111111111122.',
+'.21133111133112.',
+'.21133111133112.',
+'.21111444411112.',
+'.22111111111122.',
+'..221111111122..',
+'..211111111112..',
+'..211155551112..',
+'..221111111122..',
+'...2222222222...',
+'...22......22...',
+'..222......222..'])},
+
+sherudo:{pal:{1:'#CFE3A8',2:'#3A4A22',3:'#141A0C',4:'#8FB35A',5:'#7FA93C'},eyes:[[5,9],[6,9],[9,9],[10,9]],map:P([
+'................',
+'................',
+'.....222222.....',
+'...2255555522...',
+'..225555555522..',
+'.22555555555522.',
+'.25555555555552.',
+'.25511111111552.',
+'.22111111111122.',
+'..211331133112..',
+'..211111111112..',
+'..221144441122..',
+'...2211111122...',
+'....22222222....',
+'...22......22...',
+'..222......222..'])},
+
+shiifu:{pal:{1:'#8CE3C4',2:'#1E4A3C',3:'#0B1A14',4:'#F0A8C0'},eyes:[[4,5],[5,5],[8,5],[9,5]],map:P([
+'................',
+'.............22.',
+'....2222....212.',
+'..22111122..212.',
+'.2211111122212..',
+'.211331133112...',
+'.211111111112...',
+'.211144411112...',
+'.22111111112....',
+'..2111111112....',
+'..21111111112...',
+'..2211111122....',
+'...22111122.....',
+'...22....22.....',
+'..222....222....',
+'................'])},
+
+rumina:{pal:{1:'#A9B8F5',2:'#2E3470',3:'#12163A',4:'#F5E08C',5:'#7FE8F0'},eyes:[[4,6],[5,6],[10,6],[11,6],[4,7],[5,7],[10,7],[11,7]],map:P([
+'.......55.......',
+'......5115......',
+'.....511115.....',
+'...2211111122...',
+'..221111111122..',
+'.22111111111122.',
+'.21133111133112.',
+'.21133111133112.',
+'.21111144111112.',
+'.22111111111122.',
+'..221111111122..',
+'...2211111122...',
+'.....511115.....',
+'......5115......',
+'.......55.......',
+'................'])},
+
+doragasu:{pal:{1:'#E8654F',2:'#4A1512',3:'#1B0D0B',4:'#F5D06B',5:'#8E2B22'},eyes:[[6,5],[7,5],[10,5],[11,5]],map:P([
+'.55..........55.',
+'.555........555.',
+'.5551.2222.1555.',
+'.55522111122555.',
+'..5221111112255.',
+'..2211331133122.',
+'..2211111111122.',
+'..221444444122..',
+'..2211111111122.',
+'...22111111122..',
+'...2211111122...',
+'....22111122....',
+'....22111122....',
+'...2211..1122...',
+'..222......222..',
+'.222........222.'])},
+
+goremu:{pal:{1:'#FFD98A',2:'#2B2E3A',3:'#0E1016',5:'#7A8296'},eyes:[[5,4],[6,4],[9,4],[10,4]],map:P([
+'................',
+'..222222222222..',
+'..255555555552..',
+'..251111111152..',
+'..251331133152..',
+'..251111111152..',
+'..255111111552..',
+'..222555555222..',
+'.22255555555222.',
+'2225555555555222',
+'2255551551555522',
+'2255555555555522',
+'.22555555555522.',
+'..225555555522..',
+'..22........22..',
+'.222........222.'])},
+
+fantomu:{pal:{1:'#B8E6F0',2:'#26506B',3:'#0A1A24',4:'#4B1E3A'},eyes:[[4,5],[5,5],[10,5],[11,5],[4,6],[5,6],[10,6],[11,6]],map:P([
+'................',
+'.....222222.....',
+'...2211111122...',
+'..221111111122..',
+'.22111111111122.',
+'.21133111133112.',
+'.21133111133112.',
+'.21111111111112.',
+'.21114444411112.',
+'.22111111111122.',
+'.21111111111112.',
+'.21111111111112.',
+'.21111111111112.',
+'.22111111111122.',
+'..21.211.211.12.',
+'...2..22..22..2.'])},
+
+serafi:{pal:{1:'#EDEFFA',2:'#5A4A8E',3:'#241B45',4:'#F2A33C',5:'#C9B6F5'},eyes:[[6,5],[7,5],[10,5],[11,5]],map:P([
+'.....444444.....',
+'....44....44....',
+'.....222222.....',
+'55.2211111122.55',
+'5552211111122555',
+'5552113311331255',
+'.55211111111255.',
+'..5211444411255.',
+'...2211111122...',
+'...2211111122...',
+'....22111122....',
+'....22111122....',
+'.....221122.....',
+'.....22..22.....',
+'....222..222....',
+'................'])},
+};
+SPR.kinou={pal:{1:'#F5D06B',2:'#6B4A12',3:'#2B1D05',4:'#FFF3C4',5:'#C79A2E'},eyes:SPR.doragasu.eyes,map:SPR.doragasu.map};
+
+const POOP={pal:{1:'#7A5230',2:'#4A3018'},map:[
+'........','...11...','..1111..','.111111.','.111111.','11111111','11111111','.222222.']};
+
+/* ---------- 種族データ ---------- */
+const SPECIES={
+  egg:     {n:'タマゴ',      s:0, d:'まだ なにも わからない。'},
+  puchi:   {n:'プチ',        s:1, d:'うまれたて。よく なき、よく ねる。'},
+  moko:    {n:'モコ',        s:2, d:'ていねいに そだてられた しるし。おだやか。'},
+  toge:    {n:'トゲ',        s:2, d:'さみしさが とげに なった。きが みじかい。'},
+  garudo:  {n:'ガルド',      s:3, d:'ちからが すべて。まっすぐ ぶつかる。'},
+  sherudo: {n:'シェルド',    s:3, d:'かたい こうらで うけながす。'},
+  shiifu:  {n:'シーフ',      s:3, d:'かぜのように はやい。つかまらない。'},
+  rumina:  {n:'ルミナ',      s:3, d:'ういたまま かんがえている。'},
+  doragasu:{n:'ドラガス',    s:4, d:'ちからの きわみ。そらを こがす。'},
+  goremu:  {n:'ゴレム',      s:4, d:'まもりの きわみ。うごかざること いわの ごとし。'},
+  fantomu: {n:'ファントム',  s:4, d:'はやさの きわみ。すがたを とらえられない。'},
+  serafi:  {n:'セラフィ',    s:4, d:'かしこさの きわみ。しずかに わらう。'},
+  kinou:   {n:'キンオウ',    s:4, d:'すべてを そなえた まぼろし。めったに あらわれない。'},
+};
+const STAGE_NAME=['タマゴ','ようねんき','せいちょうき','せいじゅくき','かんぜんたい'];
+const HATCH=5*MIN, T_CHILD=2*HOUR, T_ADULT=10*HOUR, T_PERFECT=36*HOUR, BASE_LIFE=7*DAY;
+
+/* ---------- セーブデータ ---------- */
+const LS_KEY='pocketbeast.save.v1';
+function fresh(gen, inherit){
+  const now=Date.now();
+  const inh=inherit||{pw:0,df:0,sp:0,iq:0};
+  return {
+    v:1, gen:gen||1, born:now, lastTick:now, ageMs:0,
+    sp:'egg', name:'タマゴ', petName:'',
+    hunger:70, happy:70, stam:100, poops:[], sick:false, lights:true,
+    weight:12, disc:0, fatigue:0, careMiss:0,
+    pw:Math.round(inh.pw*0.1), df:Math.round(inh.df*0.1),
+    spd:Math.round(inh.sp*0.1), iq:Math.round(inh.iq*0.1),
+    tHungry:0, tSad:0, tDirty:0, tSick:0, tAwakeNight:0, poopT:0,
+    wins:0, losses:0, streak:0,
+    hof:[], dex:[], log:[], savedAt:now, dead:false, deathAt:0, deathReason:''
+  };
+}
+let S=null;
+
+/* ---------- ログ ---------- */
+function note(t, msg){
+  S.log.unshift({t:t||Date.now(), m:msg});
+  if(S.log.length>60) S.log.length=60;
+}
+const fmtTime=(t)=>{const d=new Date(t); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);};
+
+/* ---------- シミュレーション ---------- */
+function sleepingAt(t, s){
+  const h=new Date(t).getHours();
+  return (h>=22||h<7) && !s.lights;
+}
+function nightAt(t){ const h=new Date(t).getHours(); return h>=22||h<7; }
+
+function lifespan(s){ return Math.max(3*DAY, BASE_LIFE - s.careMiss*3*HOUR); }
+
+function speciesAt(s){
+  // 進化さきの決定
+  const a=s.ageMs;
+  if(a<HATCH) return 'egg';
+  if(a<T_CHILD) return 'puchi';
+  const top=()=>{
+    const arr=[['pw',s.pw],['df',s.df],['spd',s.spd],['iq',s.iq]];
+    arr.sort((x,y)=>y[1]-x[1]);
+    return arr[0][1]===0?null:arr[0][0];
+  };
+  if(a<T_ADULT) return s.careMiss<=2?'moko':'toge';
+  const t=top();
+  if(a<T_PERFECT){
+    if(!t) return s.careMiss<=2?'sherudo':'shiifu';
+    return {pw:'garudo',df:'sherudo',spd:'shiifu',iq:'rumina'}[t];
+  }
+  if(s.pw>=400&&s.df>=400&&s.spd>=400&&s.iq>=400&&s.careMiss<=2) return 'kinou';
+  if(!t) return 'fantomu';
+  return {pw:'doragasu',df:'goremu',spd:'fantomu',iq:'serafi'}[t];
+}
+
+/* dt ミリ秒ぶん、時刻 t の状態から すすめる */
+function stepOnce(s, t, dt){
+  const h=dt/HOUR;
+  const asleep=sleepingAt(t,s);
+  if(s.sp==='egg'){ s.ageMs+=dt; return; }
+  s.ageMs+=dt;
+
+  if(asleep){
+    s.hunger-=4*h; s.happy-=2*h; s.stam+=18*h; s.fatigue-=14*h;
+  }else{
+    s.hunger-=11*h; s.happy-=9*h; s.stam-=4*h; s.fatigue-=6*h;
+    s.poopT+=dt;
+    if(s.poopT>150*MIN && s.poops.length<6){ s.poopT=0; s.poops.push(t); }
+  }
+  if(s.sick){ s.hunger-=4*h; s.happy-=6*h; s.stam-=6*h; }
+
+  s.hunger=clamp(s.hunger,0,100); s.happy=clamp(s.happy,0,100);
+  s.stam=clamp(s.stam,0,100); s.fatigue=clamp(s.fatigue,0,100);
+
+  // おせわミス
+  const miss=(why)=>{ s.careMiss++; note(t,'おせわミス：'+why); };
+  if(s.hunger<=0){ s.tHungry+=dt; if(s.tHungry>=60*MIN){ s.tHungry=0; miss('おなかが ぺこぺこのまま'); } } else s.tHungry=0;
+  if(s.happy<=0){ s.tSad+=dt; if(s.tSad>=60*MIN){ s.tSad=0; miss('ごきげんが どん底のまま'); } } else s.tSad=0;
+  if(s.poops.length>0){ s.tDirty+=dt; if(s.tDirty>=90*MIN){ s.tDirty=0; miss('ウンチを そのままにした'); } } else s.tDirty=0;
+  if(nightAt(t) && s.lights){ s.tAwakeNight+=dt; if(s.tAwakeNight>=45*MIN){ s.tAwakeNight=0; miss('よる でんきを つけっぱなし'); } } else s.tAwakeNight=0;
+
+  // びょうき
+  if(!s.sick){
+    const risk=(s.poops.length>=3?1:0)+(s.hunger<=0?1:0)+(s.happy<=0?1:0)+(s.fatigue>=90?1:0);
+    if(risk>0){ s.tSick+=dt*risk; if(s.tSick>=120*MIN){ s.tSick=0; s.sick=true; note(t,'びょうきに なった…'); } }
+    else s.tSick=Math.max(0,s.tSick-dt);
+  }else{
+    s.tSick+=dt;
+    if(s.tSick>=60*MIN){ s.tSick=0; miss('びょうきを ほうっておいた'); }
+  }
+}
+
+function catchUp(now){
+  const from=S.lastTick;
+  let t=from;
+  const STEP=5*MIN;
+  let guard=0;
+  const before={sp:S.sp, poops:S.poops.length, careMiss:S.careMiss, sick:S.sick};
+  while(t<now && guard++<20000){
+    const dt=Math.min(STEP, now-t);
+    stepOnce(S, t, dt);
+    t+=dt;
+    // 進化・寿命
+    if(!S.dead){
+      const ns=speciesAt(S);
+      if(ns!==S.sp){ evolveTo(ns, t); }
+      if(S.ageMs>=lifespan(S)){ die('じゅみょう', t); break; }
+      if(S.sick && S.tSick>0 && S.careMiss>=14){ /* 進行はミス側で表現 */ }
+    }
+  }
+  S.lastTick=now;
+  return before;
+}
+
+/* この子の よびな（つけていなければ しゅぞく名） */
+const nickname=()=>S.petName||S.name;
+let needName=false, nameOpen=false;
+
+function evolveTo(key, t){
+  const was=S.sp;
+  S.sp=key; S.name=SPECIES[key].n;
+  if(!S.dex.includes(key)) S.dex.push(key);
+  if(was==='egg'){ note(t,'タマゴが かえった！『'+S.name+'』'); if(!S.petName) needName=true; }
+  else note(t,'しんか！『'+SPECIES[was].n+'』→『'+S.name+'』（'+nickname()+'）');
+}
+
+function die(reason, t){
+  S.dead=true; S.deathAt=t; S.deathReason=reason;
+  S.hof.unshift({
+    name:nickname(), species:S.name, sp:S.sp, gen:S.gen, days:Math.floor(S.ageMs/DAY),
+    hours:Math.floor(S.ageMs/HOUR), pw:S.pw, df:S.df, spd:S.spd, iq:S.iq,
+    careMiss:S.careMiss, wins:S.wins, losses:S.losses
+  });
+  if(S.hof.length>20) S.hof.length=20;
+  note(t,'『'+nickname()+'』は たびだった（'+reason+'）');
+}
+
+/* ---------- お世話 ---------- */
+function say(msg){
+  const el=document.getElementById('ticker');
+  el.textContent=msg; el.classList.add('on');
+  clearTimeout(say._t); say._t=setTimeout(()=>el.classList.remove('on'), 2200);
+}
+function hearts(n){ for(let i=0;i<n;i++) FX.push({x:64+ri(32), y:60, vy:-0.35-rf()*0.3, life:60+ri(20), c:'#E0605A'}); }
+
+function act(kind){
+  const t=Date.now();
+  if(S.dead) return;
+  if(S.sp==='egg'){ say('まだ タマゴだ…'); return; }
+  const asleep=sleepingAt(t,S);
+  if(asleep && kind!=='light'){ say('ぐうぐう ねむっている'); return; }
+
+  switch(kind){
+    case 'feed':
+      if(S.hunger>=95){ say('もう おなかいっぱい'); S.happy=clamp(S.happy-4,0,100); break; }
+      S.hunger=clamp(S.hunger+30,0,100); S.weight+=2; S.stam=clamp(S.stam+5,0,100);
+      say('ごはんを たべた'); hearts(2); break;
+    case 'snack':
+      S.hunger=clamp(S.hunger+10,0,100); S.happy=clamp(S.happy+16,0,100);
+      S.weight+=3; S.disc=clamp(S.disc-2,0,100);
+      say('おやつ！ うれしそうだ'); hearts(4); break;
+    case 'play':
+      if(S.stam<10){ say('つかれて あそべない'); break; }
+      S.happy=clamp(S.happy+18,0,100); S.stam=clamp(S.stam-8,0,100);
+      S.hunger=clamp(S.hunger-5,0,100); S.weight=Math.max(5,S.weight-1);
+      say('たくさん あそんだ'); hearts(5); break;
+    case 'clean':
+      if(S.poops.length===0){ say('きれいだよ'); break; }
+      say('ウンチを かたづけた（'+S.poops.length+'こ）');
+      S.poops=[]; S.tDirty=0; S.happy=clamp(S.happy+4,0,100); break;
+    case 'med':
+      if(!S.sick){ say('げんきだよ'); break; }
+      S.sick=false; S.tSick=0; S.happy=clamp(S.happy-6,0,100);
+      say('くすりを のんだ。よくなった'); note(t,'くすりで かいふくした'); break;
+    case 'scold':
+      S.disc=clamp(S.disc+9,0,100); S.happy=clamp(S.happy-11,0,100);
+      say('しかった。しゅんとしている'); break;
+    case 'light':
+      S.lights=!S.lights;
+      say(S.lights?'でんきを つけた':'でんきを けした'); break;
+  }
+  S.lastTick=t; render(); save();
+}
+
+/* ---------- なまえ ---------- */
+function askName(rename){
+  if(nameOpen || S.dead || S.sp==='egg') return;
+  nameOpen=true;
+  const m=document.createElement('div'); m.className='modal';
+  m.innerHTML='<div class="card">'+
+    '<h2>'+(rename?'なまえを かえる':'なまえを つける')+'</h2>'+
+    '<canvas class="npv" width="16" height="16"></canvas>'+
+    '<p style="margin:0 0 12px">'+(rename
+      ? 'この子（'+S.name+'）の よびなを かえる。'
+      : 'タマゴが かえった。『'+S.name+'』だ。なんて よぶ？')+'</p>'+
+    '<input class="txt" id="nameIn" type="text" maxlength="10" autocomplete="off" '+
+      'placeholder="'+S.name+'" value="'+(S.petName||'').replace(/"/g,'&quot;')+'">'+
+    '<p class="note">くうらんの ままなら しゅぞく名「'+S.name+'」で よぶ。あとから かえられる。</p>'+
+    '<div class="row" style="margin-top:14px">'+
+      (rename?'<button class="btn" id="nCancel">やめる</button>':'')+
+      '<button class="btn p" id="nOk">けってい</button>'+
+    '</div></div>';
+  document.body.appendChild(m);
+  drawSprite(m.querySelector('canvas').getContext('2d'), S.sp, 0, 0, 1, false);
+  const input=m.querySelector('#nameIn');
+  const close=()=>{ nameOpen=false; m.remove(); };
+  const ok=()=>{
+    const v=input.value.trim().slice(0,10);
+    S.petName=v;
+    needName=false;
+    note(Date.now(), rename?'なまえを『'+nickname()+'』に かえた':'『'+nickname()+'』と なづけた');
+    close(); render(); save(); say('『'+nickname()+'』');
+  };
+  m.querySelector('#nOk').onclick=ok;
+  const c=m.querySelector('#nCancel'); if(c) c.onclick=()=>{ needName=false; close(); };
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); ok(); } });
+  setTimeout(()=>{ try{ input.focus(); }catch(e){} }, 60);
+}
+
+/* ---------- トレーニング ---------- */
+const TRAINS=[
+  {k:'pw', n:'パワー',   ic:'💪', stat:'ちから'},
+  {k:'df', n:'ガード',   ic:'🛡', stat:'まもり'},
+  {k:'spd',n:'ダッシュ', ic:'💨', stat:'すばやさ'},
+  {k:'iq', n:'ずのう',   ic:'📘', stat:'かしこさ'},
+];
+function train(k){
+  const t=Date.now();
+  if(S.dead || S.sp==='egg'){ say('まだ できない'); return; }
+  if(sleepingAt(t,S)){ say('ねているよ'); return; }
+  if(S.sick){ say('びょうきでは むりだ'); return; }
+  if(S.stam<20){ say('たいりょくが たりない'); return; }
+
+  const cond=(S.stam/100)*(1-S.fatigue/160)*(S.happy>=50?1:0.75)*(S.hunger>=30?1:0.7);
+  const stageBonus=[0,0.6,1,1.35,1.6][SPECIES[S.sp].s];
+  const heavy=S.weight>40?0.85:S.weight<10?0.9:1;
+  let gain=Math.max(1, Math.round((5+ri(8))*cond*stageBonus*heavy));
+  const crit=rf()<0.10+S.disc/600;
+  if(crit) gain=Math.round(gain*2);
+
+  const map={pw:'pw',df:'df',spd:'spd',iq:'iq'};
+  S[map[k]]=clamp(S[map[k]]+gain,0,999);
+  S.stam=clamp(S.stam-18,0,100); S.hunger=clamp(S.hunger-8,0,100);
+  S.happy=clamp(S.happy-5,0,100); S.fatigue=clamp(S.fatigue+12,0,100);
+  S.weight=Math.max(5,S.weight-1);
+
+  const info=TRAINS.find(x=>x.k===k);
+  const msg=(crit?'ばっちり！ ':'')+info.stat+' +'+gain;
+  say(msg); note(t,'トレーニング '+info.n+'：'+info.stat+' +'+gain);
+  document.getElementById('trainOut').innerHTML=
+    '<div class="pill '+(crit?'g':'')+'">'+msg+'</div>'+
+    (S.fatigue>70?'<p class="note">つかれが たまっている。やすませると のびが もどる。</p>':'');
+  S.lastTick=t; render(); save();
+}
+
+/* ============================================================
+   オンライン（Supabase）
+   ============================================================ */
+const SB_URL = 'https://aauokhvypzpkaavskhgl.supabase.co';
+const SB_KEY = 'sb_publishable_H8azBCs1HqN4_SS8WEoH7Q__pZE1dDA';
+
+let sb = null;            // Supabase クライアント
+let meId = null;          // 自分のプレイヤーID
+let myHandle = '';
+let onlineState = 'まだ つないでいない';
+let myMonster = null;     // サーバに登録されている自分のモンスター
+let myOpen = null;        // 自分が出している募集
+let openList = [];        // 他の人の募集
+let ranking = [];
+let curMatch = null;      // いま進行中の対戦
+let matchLog = [];
+let seenEventId = 0;
+let moveSent = false;
+let inBattle = false;
+let subs = [];
+let countdownInt = null;
+
+function power(s){ return s.pw+s.df+s.spd+s.iq; }
+function maxHp(o){ return Math.round(70+o.df*0.7+(o.pw+o.spd)*0.12); }
+
+const MOVE_INFO = [
+  {k:'strike',  n:'こうげき', d:'ちからで なぐる'},
+  {k:'guard',   n:'ぼうぎょ', d:'まもり 2.2ばい・ゲージ +25'},
+  {k:'focus',   n:'ためる',   d:'つぎの 一げき 1.8ばい・そのターンは もろい'},
+  {k:'special', n:'ひっさつ', d:'ゲージ 60 つかう・大ダメージ'},
+];
+
+/* ---------- 接続 ---------- */
+async function connect(){
+  if(!window.supabase){ onlineState='つうしんの じゅんびが できなかった'; paintBattle(); return; }
+  try{
+    sb = window.supabase.createClient(SB_URL, SB_KEY, {
+      auth:{ persistSession:true, autoRefreshToken:true, storageKey:'pocketbeast.auth' },
+    });
+    let { data:{ session } } = await sb.auth.getSession();
+    if(!session){
+      const { data, error } = await sb.auth.signInAnonymously();
+      if(error) throw error;
+      session = data.session;
+    }
+    meId = session.user.id;
+
+    const { data:p } = await sb.from('players').select('handle').eq('id', meId).maybeSingle();
+    if(p){
+      myHandle = p.handle;
+    }else{
+      myHandle = 'プレイヤー' + String(1000 + Math.floor(Math.random()*9000));
+      const { error } = await sb.from('players').insert({ id:meId, handle:myHandle });
+      if(error) throw error;
+    }
+
+    onlineState = 'つながっている';
+    await refreshMine();
+    await refreshLobby();
+    watchLobby();
+    await resumeMatch();
+    await loadCloudSave();
+    paintBattle();
+  }catch(e){
+    onlineState = 'つながらなかった（'+(e && e.message ? e.message : e)+'）';
+    paintBattle();
+  }
+}
+
+/* ---------- 自分の登録 ---------- */
+async function refreshMine(){
+  if(!sb || !meId) return;
+  const { data } = await sb.from('monsters').select('*').eq('player_id', meId).maybeSingle();
+  myMonster = data || null;
+  const { data:o } = await sb.from('matches').select('*')
+    .eq('host_id', meId).eq('status','waiting').maybeSingle();
+  myOpen = o || null;
+}
+
+async function registerMonster(){
+  if(!sb){ say('つながっていない'); return; }
+  if(S.dead || S.sp==='egg'){ say('まだ とうろくできない'); return; }
+  const row = {
+    player_id: meId,
+    name: nickname().slice(0,12) || S.name,
+    species: S.name,
+    stage: SPECIES[S.sp].s,
+    pw: S.pw, df: S.df, spd: S.spd, iq: S.iq,
+    care_miss: S.careMiss, gen: S.gen,
+    age_ms: Math.round(S.ageMs),
+  };
+  const { error } = await sb.from('monsters').upsert(row);
+  if(error){
+    document.getElementById('battleBody').insertAdjacentHTML('afterbegin',
+      '<p class="note" style="color:var(--bad)">とうろくできなかった：'+error.message+'</p>');
+    return;
+  }
+  await refreshMine();
+  await refreshRanking();
+  say('とうろく した');
+  paintBattle();
+}
+
+async function refreshRanking(){
+  if(!sb) return;
+  const { data } = await sb.from('monsters')
+    .select('player_id,name,species,pw,df,spd,iq,wins,losses,rating')
+    .order('rating',{ascending:false}).limit(20);
+  ranking = data || [];
+}
+
+/* ---------- ロビー ---------- */
+async function refreshLobby(){
+  if(!sb) return;
+  const { data } = await sb.from('matches').select('*')
+    .eq('status','waiting').order('created_at',{ascending:false}).limit(30);
+  openList = (data||[]).filter(m=>m.host_id!==meId);
+  await refreshRanking();
+}
+
+function watchLobby(){
+  if(!sb) return;
+  const ch = sb.channel('lobby')
+    .on('postgres_changes', {event:'*', schema:'public', table:'matches'}, async () => {
+      if(inBattle) return;
+      await refreshLobby(); await refreshMine();
+      if(!curMatch) paintBattle();
+    })
+    .subscribe();
+  subs.push(ch);
+}
+
+async function callArena(payload){
+  const { data:{ session } } = await sb.auth.getSession();
+  const res = await fetch(SB_URL+'/functions/v1/arena', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + (session ? session.access_token : ''),
+    },
+    body: JSON.stringify(payload),
+  });
+  let body = null;
+  try{ body = await res.json(); }catch(e){ body = {error:'こたえが よめなかった'}; }
+  if(!res.ok) throw new Error(body && body.error ? body.error : ('つうしん エラー '+res.status));
+  return body;
+}
+
+function battleCosts(){
+  S.stam = clamp(S.stam-25,0,100);
+  S.hunger = clamp(S.hunger-6,0,100);
+  S.fatigue = clamp(S.fatigue+10,0,100);
+  S.lastTick = Date.now(); save();
+}
+function canFight(){
+  const t=Date.now();
+  if(S.dead||S.sp==='egg'){ say('まだ たたかえない'); return false; }
+  if(sleepingAt(t,S)){ say('ねているよ'); return false; }
+  if(S.sick){ say('びょうきでは むりだ'); return false; }
+  if(S.stam<25){ say('たいりょくが たりない'); return false; }
+  if(!myMonster){ say('さきに とうろくして'); return false; }
+  return true;
+}
+
+async function openMatch(){
+  if(!canFight()) return;
+  try{ await callArena({action:'open'}); battleCosts(); await refreshMine(); await refreshLobby(); paintBattle(); say('ぼしゅうを だした'); }
+  catch(e){ say(e.message); }
+}
+async function cancelMatch(){
+  try{ await callArena({action:'cancel'}); await refreshMine(); await refreshLobby(); paintBattle(); }
+  catch(e){ say(e.message); }
+}
+async function joinMatch(id){
+  if(!canFight()) return;
+  try{
+    const r = await callArena({action:'join', match_id:id});
+    battleCosts();
+    enterMatch(r.match);
+  }catch(e){ say(e.message); await refreshLobby(); paintBattle(); }
+}
+
+/* 再読み込み後も、進行中の対戦に戻れるようにする */
+async function resumeMatch(){
+  if(!sb) return;
+  const { data } = await sb.from('matches').select('*')
+    .eq('status','running').or('host_id.eq.'+meId+',guest_id.eq.'+meId)
+    .order('updated_at',{ascending:false}).limit(1);
+  if(data && data.length) enterMatch(data[0]);
+}
+
+/* ---------- 対戦本体 ---------- */
+function amHost(){ return curMatch && curMatch.host_id===meId; }
+function mySide(){ return amHost() ? 'host' : 'guest'; }
+function foeSide(){ return amHost() ? 'guest' : 'host'; }
+
+function enterMatch(m){
+  curMatch = m; inBattle = true; moveSent = false;
+  matchLog = []; seenEventId = 0;
+  selectTab('battle');
+  watchMatch(m.id);
+  pullEvents();
+  paintMatch();
+  startCountdown();
+}
+
+function watchMatch(id){
+  const ch = sb.channel('match:'+id)
+    .on('postgres_changes',
+      {event:'UPDATE', schema:'public', table:'matches', filter:'id=eq.'+id},
+      (p) => { curMatch = p.new; moveSent = false; pullEvents(); paintMatch(); })
+    .on('postgres_changes',
+      {event:'INSERT', schema:'public', table:'match_events', filter:'match_id=eq.'+id},
+      () => pullEvents())
+    .subscribe();
+  subs.push(ch);
+}
+
+async function pullEvents(){
+  if(!curMatch) return;
+  const { data } = await sb.from('match_events').select('*')
+    .eq('match_id', curMatch.id).gt('id', seenEventId).order('id',{ascending:true});
+  if(!data || !data.length) return;
+  data.forEach(e=>{ matchLog.push(e.line); seenEventId = Math.max(seenEventId, e.id); });
+  if(matchLog.length>120) matchLog = matchLog.slice(-120);
+  const el = document.getElementById('blog');
+  if(el){ el.innerHTML = matchLog.map(l=>'<div>'+escapeHtml(l)+'</div>').join(''); el.scrollTop = el.scrollHeight; }
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function sendMove(mv){
+  if(!curMatch || moveSent) return;
+  moveSent = true; paintMatch();
+  try{
+    const r = await callArena({action:'move', match_id:curMatch.id, move:mv});
+    if(r.match){ curMatch = r.match; moveSent = false; }
+    await pullEvents(); paintMatch();
+  }catch(e){ moveSent = false; say(e.message); paintMatch(); }
+}
+
+function startCountdown(){
+  clearInterval(countdownInt);
+  countdownInt = setInterval(async ()=>{
+    if(!curMatch || curMatch.status!=='running'){ return; }
+    const el = document.getElementById('bClock');
+    if(!curMatch.deadline){ if(el) el.textContent='--'; return; }
+    const left = Math.ceil((new Date(curMatch.deadline).getTime()-Date.now())/1000);
+    if(el) el.textContent = Math.max(0,left) + 'びょう';
+    if(left <= -1){
+      // 期限切れ。どちらかが審判に処理を頼む
+      try{ const r = await callArena({action:'tick', match_id:curMatch.id});
+           if(r.match){ curMatch = r.match; moveSent=false; await pullEvents(); paintMatch(); } }
+      catch(e){}
+    }
+  }, 1000);
+}
+
+function leaveMatch(){
+  curMatch = null; inBattle = false; moveSent = false;
+  clearInterval(countdownInt);
+  refreshMine().then(refreshLobby).then(paintBattle);
+}
+
+async function forfeit(){
+  if(!curMatch) return;
+  try{ await callArena({action:'forfeit', match_id:curMatch.id}); }catch(e){}
+  leaveMatch();
+}
+
+/* ---------- 画面 ---------- */
+function hpRow(label, hp, max, gauge){
+  const r = max ? hp/max : 0;
+  return '<div class="kv"><span>'+escapeHtml(label)+'</span><b class="num">'+Math.max(0,hp)+' / '+max+'</b></div>'+
+    '<div class="hpbar"><i class="'+(r>.5?'':r>.2?'w':'b')+'" style="width:'+Math.max(0,r*100)+'%"></i></div>'+
+    '<div class="gauge"><i style="width:'+clamp(gauge,0,100)+'%"></i></div>';
+}
+
+function paintMatch(){
+  const body = document.getElementById('battleBody');
+  if(!curMatch){ paintBattle(); return; }
+  const meS = mySide(), foeS = foeSide();
+  const meSnap = curMatch[meS+'_snap'] || {name:'じぶん'};
+  const foeSnap = curMatch[foeS+'_snap'] || {name:'あいて'};
+  const done = curMatch.status!=='running';
+
+  let head = '';
+  if(done){
+    const w = curMatch.winner;
+    head = '<h3 style="margin:0 0 10px; color:'+(w===meId?'var(--good)':w?'var(--bad)':'var(--muted)')+'">'+
+      (w===meId?'かち！':w?'まけ…':'ひきわけ')+'</h3>';
+  }
+
+  body.innerHTML = head +
+    hpRow(meSnap.name+'（じぶん）', curMatch[meS+'_hp'], curMatch[meS+'_max'], curMatch[meS+'_gauge']) +
+    '<div style="height:12px"></div>' +
+    hpRow(foeSnap.name, curMatch[foeS+'_hp'], curMatch[foeS+'_max'], curMatch[foeS+'_gauge']) +
+    (done ? '' :
+      '<div class="kv" style="margin-top:12px"><span>'+curMatch.turn+'ターンめ</span><b class="num" id="bClock">--</b></div>'+
+      '<div class="moves">'+MOVE_INFO.map(m=>{
+        const off = moveSent || (m.k==='special' && curMatch[meS+'_gauge']<60);
+        return '<button class="btn'+(m.k==='special'?' p':'')+'" data-mv="'+m.k+'"'+(off?' disabled':'')+'>'+
+          '<b>'+m.n+'</b><small>'+m.d+'</small></button>';
+      }).join('')+'</div>'+
+      (moveSent?'<p class="note">あいての てを まっています…</p>':'<p class="note">20びょう いないに えらぶ。えらばないと こうげき あつかい。</p>')
+    ) +
+    '<div class="bl" id="blog" style="margin-top:12px"></div>' +
+    '<div class="row" style="margin-top:12px">'+
+      (done
+        ? '<button class="btn p" id="bBack">ロビーに もどる</button>'
+        : '<button class="btn" id="bGiveUp">こうさん</button>')+
+    '</div>';
+
+  const el = document.getElementById('blog');
+  el.innerHTML = matchLog.map(l=>'<div>'+escapeHtml(l)+'</div>').join('');
+  el.scrollTop = el.scrollHeight;
+
+  body.querySelectorAll('button[data-mv]').forEach(b=>b.onclick=()=>sendMove(b.dataset.mv));
+  const bb = document.getElementById('bBack');   if(bb) bb.onclick = ()=>{ afterMatch(); };
+  const bg = document.getElementById('bGiveUp'); if(bg) bg.onclick = forfeit;
+}
+
+function afterMatch(){
+  // 勝敗を 育成のほうにも 反映する
+  if(curMatch && curMatch.status==='done'){
+    const t = Date.now();
+    const foeS = foeSide();
+    const foeName = (curMatch[foeS+'_snap']||{}).name || 'あいて';
+    if(curMatch.winner===meId){
+      S.wins++; S.streak++; S.happy=clamp(S.happy+14,0,100); S.disc=clamp(S.disc+5,0,100);
+      note(t,'たいせんに かった（'+foeName+'）');
+    }else if(curMatch.winner){
+      S.losses++; S.streak=0; S.happy=clamp(S.happy-12,0,100);
+      note(t,'たいせんに まけた（'+foeName+'）');
+    }else{
+      note(t,'たいせんは ひきわけ（'+foeName+'）');
+    }
+    S.lastTick=t; save(); render();
+  }
+  leaveMatch();
+}
+
+function paintBattle(){
+  const body = document.getElementById('battleBody');
+  if(!body) return;
+  if(curMatch){ paintMatch(); return; }
+
+  if(!sb){
+    body.innerHTML = '<p class="note" style="margin:0">'+escapeHtml(onlineState)+'</p>'+
+      '<div class="row" style="margin-top:10px"><button class="btn p" id="bRetry">つなぎなおす</button></div>';
+    const r=document.getElementById('bRetry'); if(r) r.onclick=connect;
+    return;
+  }
+
+  const meReg = myMonster
+    ? '<div class="kv"><span>'+escapeHtml(myMonster.name)+'（'+escapeHtml(myMonster.species)+'）</span>'+
+      '<b class="num">レート '+myMonster.rating+'・'+myMonster.wins+'しょう '+myMonster.losses+'はい</b></div>'+
+      '<div class="kv"><span>とうろく ないよう</span><b class="num">ちから'+myMonster.pw+'／まもり'+myMonster.df+
+      '／すばやさ'+myMonster.spd+'／かしこさ'+myMonster.iq+'</b></div>'
+    : '<p class="note" style="margin:0">まだ とうろくして いない。とうろくすると ほかの人と たたかえる。</p>';
+
+  const stale = myMonster && (myMonster.pw!==S.pw||myMonster.df!==S.df||myMonster.spd!==S.spd||myMonster.iq!==S.iq||myMonster.name!==nickname());
+
+  body.innerHTML =
+    '<div class="kv"><span>じぶんの なまえ</span><b>'+escapeHtml(myHandle)+' <button class="mini" id="bHandle">かえる</button></b></div>'+
+    meReg +
+    '<div class="row" style="margin-top:10px">'+
+      '<button class="btn'+(myMonster&&!stale?'':' p')+'" id="bReg">'+(myMonster?'とうろくを こうしん':'モンスターを とうろく')+'</button>'+
+      (myOpen
+        ? '<button class="btn" id="bCancel">ぼしゅうを とりけす</button>'
+        : '<button class="btn p" id="bOpen">たいせんを ぼしゅう</button>')+
+    '</div>'+
+    (stale?'<p class="note" style="color:var(--warn)">そだてた ぶんが とうろくに はんえいされていない。「とうろくを こうしん」を おす。</p>':'')+
+    (myOpen?'<p class="note">ぼしゅうちゅう。だれかが はいると じどうで はじまる。</p>':'')+
+
+    '<h3>いま ぼしゅうちゅう</h3>'+
+    (openList.length
+      ? openList.map(m=>{
+          const s=m.host_snap||{};
+          return '<div class="foe" style="margin-bottom:8px">'+
+            '<div class="fi"><div class="fn">'+escapeHtml(s.name||'?')+'<span class="pill" style="margin-left:6px">'+escapeHtml(s.species||'')+'</span></div>'+
+            '<div class="fd num">ちから'+(s.pw||0)+'／まもり'+(s.df||0)+'／すばやさ'+(s.spd||0)+'／かしこさ'+(s.iq||0)+'</div></div>'+
+            '<button class="btn p" data-join="'+m.id+'">たたかう</button></div>';
+        }).join('')
+      : '<p class="note" style="margin:0">いまは だれも ぼしゅうして いない。じぶんで だして まつと、だれかが 来る。</p>')+
+
+    '<h3>ランキング</h3>'+
+    (ranking.length
+      ? ranking.map((r,i)=>'<div class="kv"><span>'+(i+1)+'. '+escapeHtml(r.name)+'（'+escapeHtml(r.species)+'）'+
+        (r.player_id===meId?' <span class="pill g">じぶん</span>':'')+'</span>'+
+        '<b class="num">'+r.rating+'　'+r.wins+'-'+r.losses+'</b></div>').join('')
+      : '<p class="note" style="margin:0">まだ だれも いない。</p>')+
+
+    '<p class="note">たいせんには たいりょくを 25 つかう。</p>';
+
+  const g=(id)=>document.getElementById(id);
+  if(g('bReg'))    g('bReg').onclick = registerMonster;
+  if(g('bOpen'))   g('bOpen').onclick = openMatch;
+  if(g('bCancel')) g('bCancel').onclick = cancelMatch;
+  if(g('bHandle')) g('bHandle').onclick = askHandle;
+  body.querySelectorAll('button[data-join]').forEach(b=>b.onclick=()=>joinMatch(b.dataset.join));
+}
+
+function askHandle(){
+  const m=document.createElement('div'); m.className='modal';
+  m.innerHTML='<div class="card"><h2>じぶんの なまえ</h2>'+
+    '<p style="margin:0 0 10px">ロビーや ランキングに でる なまえ。</p>'+
+    '<input class="txt" id="hIn" type="text" maxlength="16" value="'+escapeHtml(myHandle)+'">'+
+    '<div class="row" style="margin-top:14px"><button class="btn" id="hNo">やめる</button>'+
+    '<button class="btn p" id="hOk">けってい</button></div></div>';
+  document.body.appendChild(m);
+  m.querySelector('#hNo').onclick=()=>m.remove();
+  m.querySelector('#hOk').onclick=async()=>{
+    const v=m.querySelector('#hIn').value.trim().slice(0,16);
+    if(!v){ m.remove(); return; }
+    myHandle=v; m.remove();
+    try{ await sb.from('players').update({handle:v}).eq('id',meId); }catch(e){}
+    paintBattle();
+  };
+  setTimeout(()=>{ try{ m.querySelector('#hIn').focus(); }catch(e){} }, 60);
+}
+
+/* ---------- 描画 ---------- */
+const cv=document.getElementById('lcd'), cx=cv.getContext('2d');
+cx.imageSmoothingEnabled=false;
+let FX=[]; let frame=0;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function drawMap(ctx, map, pal, x, y, sc, skip){
+  for(let r=0;r<map.length;r++){
+    const row=map[r];
+    for(let c=0;c<row.length;c++){
+      const ch=row[c];
+      if(ch==='.') continue;
+      let col=pal[ch]; if(!col) continue;
+      if(skip && skip(c,r)) col=pal[1]||col;
+      ctx.fillStyle=col;
+      ctx.fillRect(x+c*sc, y+r*sc, sc, sc);
+    }
+  }
+}
+function drawSprite(ctx, key, x, y, sc, blink){
+  const s=SPR[key]; if(!s) return;
+  const skip = blink && s.eyes ? (c,r)=>s.eyes.some(e=>e[0]===c&&e[1]===r) : null;
+  drawMap(ctx, s.map, s.pal, x, y, sc, skip);
+}
+
+function drawScreen(){
+  const t=Date.now();
+  const asleep=sleepingAt(t,S);
+  // 背景
+  cx.fillStyle = asleep ? '#7C8A4A' : '#C3D46B';
+  cx.fillRect(0,0,160,120);
+  cx.fillStyle = asleep ? '#6E7B42' : '#B4C65C';
+  for(let y=0;y<120;y+=4) for(let x=(y/4)%2?2:0;x<160;x+=4) cx.fillRect(x,y,1,1);
+  // ゆか
+  cx.fillStyle='#8C9C4A'; cx.fillRect(0,104,160,1);
+
+  if(S.dead){
+    cx.fillStyle='#2B3316'; cx.font='12px DotGothic16, monospace'; cx.textAlign='center';
+    cx.fillText('☆', 80, 46); cx.fillText('おわかれ', 80, 66);
+    cx.textAlign='left'; return;
+  }
+
+  // ウンチ
+  for(let i=0;i<S.poops.length;i++) drawMap(cx, POOP.map, POOP.pal, 6+i*19, 88, 2, null);
+
+  // 本体
+  const bob = (!reduce && !asleep && S.sp!=='egg') ? Math.round(Math.sin(frame/12)*1.5) : 0;
+  const wob = (!reduce && S.sp==='egg') ? Math.round(Math.sin(frame/8)*1) : 0;
+  const blink = !asleep && (frame%110)<7;
+  drawSprite(cx, S.sp, 48+wob, 26+bob, 4, blink || asleep);
+
+  // ねむり
+  if(asleep){
+    cx.fillStyle='#2B3316'; cx.font='11px DotGothic16, monospace';
+    const zs=['z','Z','z'];
+    for(let i=0;i<3;i++) cx.fillText(zs[i], 116+i*7, 36-i*8+(reduce?0:Math.round(Math.sin(frame/20+i)*2)));
+  }
+  // びょうき
+  if(S.sick){
+    cx.fillStyle='#4A2A18'; cx.font='11px DotGothic16, monospace';
+    cx.fillText('✚', 118, 44+(reduce?0:Math.round(Math.sin(frame/15)*2)));
+    cx.fillText('✚', 30, 38+(reduce?0:Math.round(Math.cos(frame/17)*2)));
+  }
+  // よびだし（お腹すいた等）
+  const alert = S.hunger<=15?'はらぺこ' : S.happy<=15?'さみしい' : S.poops.length>=3?'くさい' : '';
+  if(alert && !asleep && (frame%60)<36){
+    cx.fillStyle='#2B3316'; cx.font='11px DotGothic16, monospace'; cx.textAlign='center';
+    cx.fillText('！'+alert, 80, 18); cx.textAlign='left';
+  }
+  // エフェクト
+  FX=FX.filter(p=>{
+    p.y+=p.vy; p.life--;
+    if(p.life<=0) return false;
+    cx.fillStyle=p.c; cx.fillRect(Math.round(p.x), Math.round(p.y), 3, 3);
+    return true;
+  });
+}
+// スマホの電池を食わないよう 10fps に間引く
+let lastDraw=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(ts-lastDraw < 100) return;
+  lastDraw=ts; frame++; drawScreen();
+}
+
+/* ---------- UI ---------- */
+function bar(id, v){
+  const el=document.getElementById(id);
+  el.style.width=clamp(v,0,100)+'%';
+  el.className = v>50?'':v>20?'w':'b';
+}
+function render(){
+  document.getElementById('genLabel').textContent='だい'+S.gen+'せだい';
+  bar('mHunger',S.hunger); bar('mHappy',S.happy); bar('mStam',S.stam);
+  bar('mClean', 100-S.poops.length*18);
+
+  const t=Date.now(), asleep=sleepingAt(t,S);
+  document.getElementById('bLight').classList.toggle('hot', !S.lights);
+  document.getElementById('bMed').classList.toggle('hot', S.sick);
+  document.getElementById('bClean').classList.toggle('hot', S.poops.length>0);
+  ['bFeed','bSnack','bPlay','bClean','bMed','bScold','bTrain'].forEach(id=>{
+    document.getElementById(id).disabled = S.dead || S.sp==='egg' || asleep;
+  });
+  document.getElementById('bLight').disabled = S.dead;
+
+  // ステータス
+  const sp=SPECIES[S.sp];
+  const days=Math.floor(S.ageMs/DAY), hrs=Math.floor(S.ageMs%DAY/HOUR);
+  document.getElementById('stName').textContent = S.dead
+    ? '『'+nickname()+'』は たびだった'
+    : (S.sp==='egg' ? 'タマゴ' : nickname()+'（'+S.name+'・'+STAGE_NAME[sp.s]+'）');
+  const mk=(n,v)=>'<div class="st"><b>'+n+'</b><div class="track"><i style="width:'+(v/999*100)+'%"></i></div><div class="v">'+v+'</div></div>';
+  document.getElementById('stBars').innerHTML=
+    mk('ちから',S.pw)+mk('まもり',S.df)+mk('すばやさ',S.spd)+mk('かしこさ',S.iq);
+  const careClass=S.careMiss<=2?'g':S.careMiss<=6?'w':'b';
+  document.getElementById('stInfo').innerHTML=
+    '<div class="kv"><span>ねんれい</span><b class="num">'+days+'にち '+hrs+'じかん</b></div>'+
+    '<div class="kv"><span>じゅみょうの めやす</span><b class="num">'+(lifespan(S)/DAY).toFixed(1)+'にち</b></div>'+
+    '<div class="kv"><span>おせわミス</span><b><span class="pill '+careClass+'">'+S.careMiss+'かい</span></b></div>'+
+    '<div class="kv"><span>たいじゅう</span><b class="num">'+Math.round(S.weight)+'g</b></div>'+
+    '<div class="kv"><span>しつけ</span><b class="num">'+Math.round(S.disc)+'</b></div>'+
+    '<div class="kv"><span>つかれ</span><b class="num">'+Math.round(S.fatigue)+'</b></div>'+
+    '<div class="kv"><span>ようす</span><b>'+(S.dead?'—':S.sick?'<span class="pill b">びょうき</span>':asleep?'<span class="pill">すいみんちゅう</span>':'<span class="pill g">げんき</span>')+'</b></div>'+
+    '<p class="note">'+sp.d+'</p>'+
+    '<div class="row" style="margin-top:12px">'+
+      (S.dead?'<button class="btn p" id="bNext">つぎの せだいを むかえる</button>':'')+
+      (!S.dead&&S.sp!=='egg'?'<button class="btn" id="bRename">なまえを かえる</button>':'')+
+    '</div>';
+  const bn=document.getElementById('bNext');
+  if(bn) bn.onclick=nextGen;
+  const br=document.getElementById('bRename');
+  if(br) br.onclick=()=>askName(true);
+
+  // トレーニング
+  document.getElementById('trainRow').innerHTML=TRAINS.map(x=>
+    '<button class="btn" data-k="'+x.k+'">'+x.ic+' '+x.n+'</button>').join('');
+  document.getElementById('trainRow').querySelectorAll('button').forEach(b=>b.onclick=()=>train(b.dataset.k));
+
+  // きろく
+  document.getElementById('logList').innerHTML = S.log.length
+    ? S.log.map(l=>'<li><span class="t num">'+fmtTime(l.t)+'</span>'+l.m+'</li>').join('')
+    : '<li class="note">まだ なにも おきていない。</li>';
+  document.getElementById('hof').innerHTML = S.hof.length
+    ? S.hof.map(h=>'<div class="kv"><span>だい'+h.gen+'せだい '+h.name+(h.species&&h.species!==h.name?'（'+h.species+'）':'')+'</span><b class="num">'+h.days+'にち／ちから'+h.pw+'・まもり'+h.df+'・すばやさ'+h.spd+'・かしこさ'+h.iq+'</b></div>').join('')
+    : '<p class="note" style="margin:0">まだ いない。</p>';
+  const all=Object.keys(SPECIES);
+  document.getElementById('dex').innerHTML='<div class="row">'+all.map(k=>
+    S.dex.includes(k)
+      ? '<span class="pill g">'+SPECIES[k].n+'</span>'
+      : '<span class="pill">？？？</span>').join('')+'</div>'+
+    '<p class="note">'+S.dex.length+' / '+all.length+' しゅるい</p>';
+
+  if(document.getElementById('p-battle').hidden===false && !inBattle && !curMatch) paintBattle();
+  if(needName && !nameOpen && !S.dead && S.sp!=='egg') askName(false);
+}
+function nextGen(){
+  const inh={pw:S.pw,df:S.df,sp:S.spd,iq:S.iq};
+  const hof=S.hof, dex=S.dex, gen=S.gen+1;
+  const wins=S.wins, losses=S.losses;
+  S=fresh(gen, inh); S.hof=hof; S.dex=dex; S.wins=wins; S.losses=losses;
+  if(!S.dex.includes('egg')) S.dex.push('egg');
+  note(Date.now(),'だい'+gen+'せだいの タマゴが とどいた');
+  curMatch=null; render(); save();
+  say('あたらしい タマゴが とどいた');
+}
+
+/* ---------- 保存 ---------- */
+let saveTimer=null, saveState='この ブラウザの なか だけ', firstRun=false, cloudReady=false;
+function lsSave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
+function lsLoad(){ try{ const r=localStorage.getItem(LS_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function save(){
+  S.savedAt=Date.now();
+  lsSave();
+  if(!cloudReady || !sb || !meId) return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    sb.from('saves').upsert({ player_id:meId, data:S, saved_at:new Date().toISOString() })
+      .then(()=>{}, ()=>{});
+  }, 1500);
+}
+async function loadCloudSave(){
+  if(!sb || !meId) return;
+  try{
+    const { data } = await sb.from('saves').select('data,saved_at').eq('player_id', meId).maybeSingle();
+    cloudReady = true;
+    saveState = 'この ブラウザ ＋ クラウド';
+    setSaveNote();
+    if(!data || !data.data){ save(); return; }
+    const remote = data.data;
+    // この端末が はじめてなら クラウドの つづきを ゆうせんする
+    if(remote && (firstRun || (remote.savedAt||0) > (S.savedAt||0) + 5000)){
+      S = remote; firstRun = false;
+      const base=fresh(S.gen||1,null);
+      Object.keys(base).forEach(k=>{ if(S[k]===undefined) S[k]=base[k]; });
+      const gap=Math.max(0, Date.now()-S.lastTick);
+      const b2=catchUp(Date.now()); render(); lsSave();
+      say('クラウドの つづきを よみこんだ');
+      welcomeBack(b2, gap);
+    }else{ save(); }
+  }catch(e){ /* クラウドが使えなくても ローカルだけで動く */ }
+}
+function setSaveNote(){
+  const txt='セーブ：'+saveState+'。'+(cloudReady
+    ? 'おなじ ブラウザなら べつの スマホや PC で ひらいても つづきから あそべる。'
+    : 'いまは この ブラウザの なかだけに ほぞんされている。');
+  const a=document.getElementById('saveNote'), b=document.getElementById('helpSave');
+  if(a) a.textContent=txt; if(b) b.textContent=txt;
+}
+
+/* ---------- 起動 ---------- */
+function welcomeBack(before, gapMs){
+  if(gapMs < 20*MIN) return;
+  const h=Math.floor(gapMs/HOUR), m=Math.floor(gapMs%HOUR/MIN);
+  const items=[];
+  const dMiss=S.careMiss-before.careMiss;
+  if(before.sp!==S.sp) items.push('『'+SPECIES[before.sp].n+'』から『'+S.name+'』に しんかした');
+  if(S.poops.length>before.poops) items.push('ウンチが '+(S.poops.length-before.poops)+'こ ふえた');
+  if(!before.sick && S.sick) items.push('びょうきに なっている');
+  if(dMiss>0) items.push('おせわミスが '+dMiss+'かい ふえた');
+  if(S.hunger<=20) items.push('おなかが ぺこぺこ');
+  if(S.happy<=20) items.push('ごきげんが よくない');
+  if(S.dead) items.push('『'+nickname()+'』が じゅみょうを むかえた');
+  if(!items.length) items.push('とくに かわりなく すごしていた');
+
+  const m0=document.createElement('div'); m0.className='modal';
+  m0.innerHTML='<div class="card"><h2>おかえり</h2>'+
+    '<p style="margin:0 0 10px">るすの あいだ <b class="num">'+(h>0?h+'じかん ':'')+m+'ふん</b> ぶん すすんだ。</p>'+
+    '<ul style="margin:0 0 14px; padding-left:1.2em">'+items.map(x=>'<li>'+x+'</li>').join('')+'</ul>'+
+    '<div class="row"><button class="btn p" id="okBack">ようすを みる</button></div></div>';
+  document.body.appendChild(m0);
+  m0.querySelector('#okBack').onclick=()=>m0.remove();
+}
+
+function bindUI(){
+  const pairs={bFeed:'feed', bSnack:'snack', bPlay:'play', bClean:'clean', bMed:'med', bScold:'scold', bLight:'light'};
+  Object.keys(pairs).forEach(id=>document.getElementById(id).onclick=()=>act(pairs[id]));
+  document.getElementById('bTrain').onclick=()=>selectTab('train');
+  document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>selectTab(b.dataset.p));
+  document.getElementById('bReset').onclick=()=>{
+    const m=document.createElement('div'); m.className='modal';
+    m.innerHTML='<div class="card"><h2>さいしょから やりなおす</h2>'+
+      '<p style="margin:0 0 12px">いまの モンスター、でんどういり、ずかん、すべて きえる。もとには もどせない。</p>'+
+      '<div class="row"><button class="btn" id="cNo">やめる</button><button class="btn p" id="cYes">けす</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#cNo').onclick=()=>m.remove();
+    m.querySelector('#cYes').onclick=()=>{
+      S=fresh(1,null); S.dex=['egg']; note(Date.now(),'さいしょから はじめた');
+      curMatch=null; m.remove(); render(); save(); say('あたらしい タマゴ');
+    };
+  };
+}
+function selectTab(p){
+  ['status','train','battle','book','help'].forEach(k=>{
+    document.getElementById('p-'+k).hidden = (k!==p);
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.p===p)));
+  if(p==='battle' && !inBattle) paintBattle();
+}
+
+function start(){
+  S = lsLoad() || null;
+  const first = !S;
+  firstRun = first;
+  if(first){ S=fresh(1,null); S.dex=['egg']; note(Date.now(),'タマゴが とどいた'); }
+  // 欠けたフィールドの補完（古いセーブ対策）
+  const base=fresh(S.gen||1,null);
+  Object.keys(base).forEach(k=>{ if(S[k]===undefined) S[k]=base[k]; });
+
+  const now=Date.now();
+  const gap=Math.max(0, now-S.lastTick);
+  const before=catchUp(now);
+  if(!S.petName && S.sp!=='egg' && !S.dead) needName=true;
+  bindUI(); render(); loop(); save();
+  if(!first) welcomeBack(before, gap);
+  if(first) say('タマゴが とどいた');
+
+  // 1分ごとに時間を進める（入力中の欄は無いので再描画で困るものは無い）
+  setInterval(()=>{ if(!inBattle){ catchUp(Date.now()); render(); lsSave(); } }, 60000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && !inBattle){ const g=Math.max(0,Date.now()-S.lastTick); const b=catchUp(Date.now()); render(); save(); welcomeBack(b,g); }
+  });
+
+  setSaveNote();
+  connect();          // サーバにつなぐ（つながらなくても 育成は そのまま遊べる）
+}
+
+start();
+</script>
+</body>
+</html>
