@@ -63,3 +63,21 @@ Edge Function から `Content-Type: text/html` を付けて返しても、
 1. Supabase の匿名ログインを有効化（ダッシュボード → Authentication → Sign In / Providers）
 2. GitHub にリポジトリを作って push → Pages を有効化
 3. 2端末で実戦確認
+
+## 公開先
+
+- アプリ: https://ytakaiclimb-cell.github.io/pocket-beast/
+- リポジトリ: https://github.com/ytakaiclimb-cell/pocket-beast （public）
+
+`docs/` を直して `git push` すれば、1〜2分で反映される。
+
+## 通しテストで確かめたこと（2026-09-26）
+
+- 匿名ログイン → players 行の作成 → ロビー表示
+- 募集 → 参加 → 10ターンの対戦 → 勝敗確定 → レート更新（1012 / 988）
+- こうげき・ぼうぎょ・ためる・ひっさつ・かわす が全部発火する
+- 細工の拒否:
+  - ありえない強さへの更新 → `stats total 3996 exceeds the cap 126` で拒否
+  - 自分のレート・勝ち数の書き換え → 元の値に戻る
+  - 他人のモンスターの書き換え → 0行（RLS）
+  - 対戦結果の直接書き換え → 0行（書き込みポリシー無し）
