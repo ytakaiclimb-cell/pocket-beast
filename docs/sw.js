@@ -6,7 +6,7 @@
 // 育成のぶんは端末の中だけで動くので、電波が無くても遊べる。
 // 対戦だけは通信が要る。
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = 'pocket-beast-' + VERSION;
 
 const SHELL = [
@@ -59,10 +59,15 @@ self.addEventListener('fetch', (e) => {
   const isPage = req.mode === 'navigate' || url.pathname.endsWith('/') ||
                  url.pathname.endsWith('.html');
   if (isPage) {
+    // no-cache でブラウザ自身のキャッシュも飛ばして、サーバに聞きに行く。
+    // GitHub Pages が max-age=600 を付けるので、これが無いと
+    // 直したものが 10分ほど届かない。
     e.respondWith(
-      fetch(req).then(save).catch(() =>
-        caches.match(req).then((hit) => hit || caches.match('./index.html'))
-      )
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
+        .then(save)
+        .catch(() =>
+          caches.match(req).then((hit) => hit || caches.match('./index.html'))
+        )
     );
     return;
   }
