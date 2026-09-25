@@ -6,7 +6,7 @@
 // 育成のぶんは端末の中だけで動くので、電波が無くても遊べる。
 // 対戦だけは通信が要る。
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = 'pocket-beast-' + VERSION;
 
 const SHELL = [
@@ -46,17 +46,31 @@ self.addEventListener('fetch', (e) => {
   // Supabase への通信はキャッシュしない（対戦もセーブも常に最新が要る）
   if (url.origin !== self.location.origin) return;
 
-  // 手元のキャッシュをすぐ返しつつ、裏で新しいものを取りに行く。
-  // 次に開いたときに更新版になる。
+  const save = (res) => {
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+    }
+    return res;
+  };
+
+  // アプリ本体（HTML）は「通信さきに、だめならキャッシュ」。
+  // こうしないと、直したものが次の次まで届かない。
+  const isPage = req.mode === 'navigate' || url.pathname.endsWith('/') ||
+                 url.pathname.endsWith('.html');
+  if (isPage) {
+    e.respondWith(
+      fetch(req).then(save).catch(() =>
+        caches.match(req).then((hit) => hit || caches.match('./index.html'))
+      )
+    );
+    return;
+  }
+
+  // 画像などは「キャッシュさきに、裏で更新」。
   e.respondWith(
     caches.match(req).then((hit) => {
-      const net = fetch(req).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => hit);
+      const net = fetch(req).then(save).catch(() => hit);
       return hit || net;
     })
   );
