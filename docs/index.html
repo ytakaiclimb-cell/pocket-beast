@@ -168,12 +168,19 @@ ol.steps{margin:0; padding-left:1.3em} ol.steps li{margin-bottom:7px}
 .moves .btn small{font-family:"Zen Kaku Gothic New",sans-serif; font-size:11px; opacity:.75; line-height:1.4}
 .mini{appearance:none; border:1px solid var(--line); background:var(--bg); color:var(--muted);
   font-family:"DotGothic16",monospace; font-size:11px; padding:2px 8px; border-radius:99px; margin-left:6px}
+#installBar{display:flex; align-items:center; gap:10px; background:var(--amber); color:var(--amber-on);
+  border-radius:var(--r); padding:10px 12px}
+#installBar span{flex:1; font-family:"DotGothic16",monospace; font-size:13px; line-height:1.4}
+#installBar button{appearance:none; border:0; border-radius:8px; padding:8px 12px; flex:none;
+  font-family:"DotGothic16",monospace; font-size:13px; background:var(--amber-on); color:var(--amber)}
+#installBar .x{background:transparent; color:var(--amber-on); padding:8px 4px; opacity:.7}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 </style>
 </head>
 <body>
 
 <div class="wrap">
+  <div id="installBar" hidden></div>
   <div class="device">
     <div class="brand"><b>POCKET BEAST</b><span class="gen pix" id="genLabel">だい1せだい</span></div>
     <div class="screen">
@@ -1517,7 +1524,7 @@ function start(){
 }
 
 /* ---------- ホーム画面に入れる ---------- */
-const APP_BUILD = 'v6';
+const APP_BUILD = 'v7';
 let deferredPrompt = null;
 let installState = 'checking';
 
@@ -1554,7 +1561,28 @@ async function doInstall(){
   paintInstall();
 }
 
+let barHidden = false;
+try{ barHidden = localStorage.getItem('pocketbeast.barHidden') === '1'; }catch(e){}
+
+function paintBar(){
+  const bar = document.getElementById('installBar');
+  if(!bar) return;
+  const show = installState === 'ready' && !barHidden && !isInstalled();
+  bar.hidden = !show;
+  if(!show) return;
+  bar.innerHTML = '<span>ホームがめんに おくと アイコンから ひらけます</span>'+
+    '<button id="barInstall">いれる</button>'+
+    '<button class="x" id="barClose" aria-label="とじる">✕</button>';
+  document.getElementById('barInstall').onclick = doInstall;
+  document.getElementById('barClose').onclick = ()=>{
+    barHidden = true;
+    try{ localStorage.setItem('pocketbeast.barHidden','1'); }catch(e){}
+    paintBar();
+  };
+}
+
 function paintInstall(){
+  paintBar();
   const box = document.getElementById('installBox');
   if(!box) return;
 

@@ -6,7 +6,7 @@
 // 育成のぶんは端末の中だけで動くので、電波が無くても遊べる。
 // 対戦だけは通信が要る。
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = 'pocket-beast-' + VERSION;
 
 const SHELL = [
