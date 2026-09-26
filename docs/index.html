@@ -240,8 +240,8 @@ ol.steps{margin:0; padding-left:1.3em} ol.steps li{margin-bottom:7px}
 
   <section class="card" id="p-help" hidden>
     <h2>ホームがめんに おく</h2>
-    <p class="note" style="margin-top:0">このページを ホーム画面に 追加すると、ふつうのアプリと おなじように アイコンから ひらけます。</p>
-    <h3>Android（Chrome）</h3>
+    <div id="installBox"></div>
+    <h3>てで やる場合：Android（Chrome）</h3>
     <ol class="steps">
       <li>画面の みぎうえ「︙」を おす</li>
       <li>「ホーム画面に追加」を えらぶ</li>
@@ -1516,7 +1516,79 @@ function start(){
   connect();          // サーバにつなぐ（つながらなくても 育成は そのまま遊べる）
 }
 
+/* ---------- ホーム画面に入れる ---------- */
+const APP_BUILD = 'v6';
+let deferredPrompt = null;
+let installState = 'checking';
+
+function isInstalled(){
+  try{
+    return matchMedia('(display-mode: standalone)').matches
+        || matchMedia('(display-mode: fullscreen)').matches
+        || navigator.standalone === true;
+  }catch(e){ return false; }
+}
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  installState = 'ready';
+  paintInstall();
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredPrompt = null;
+  installState = 'installed';
+  paintInstall();
+  say('ホームがめんに いれた');
+});
+
+async function doInstall(){
+  if(!deferredPrompt) return;
+  const p = deferredPrompt;
+  deferredPrompt = null;
+  try{
+    p.prompt();
+    const { outcome } = await p.userChoice;
+    if(outcome !== 'accepted'){ installState = 'ready'; deferredPrompt = p; }
+  }catch(e){ installState = 'ready'; deferredPrompt = p; }
+  paintInstall();
+}
+
+function paintInstall(){
+  const box = document.getElementById('installBox');
+  if(!box) return;
+
+  if(isInstalled() || installState === 'installed'){
+    box.innerHTML = '<p class="note" style="margin-top:0"><span class="pill g">かんりょう</span> '+
+      'もう ホームがめんに 入っています。</p>';
+    return;
+  }
+  if(installState === 'ready'){
+    box.innerHTML =
+      '<p class="note" style="margin-top:0">ボタン ひとつで ホームがめんに おけます。</p>'+
+      '<div class="row" style="margin-top:10px"><button class="btn p" id="bInstall">ホームがめんに いれる</button></div>';
+    document.getElementById('bInstall').onclick = doInstall;
+    return;
+  }
+  if(installState === 'checking'){
+    box.innerHTML = '<p class="note" style="margin-top:0">ホームがめんに おけるか しらべています…</p>';
+    return;
+  }
+  // 出せなかった。理由の見当をつけて伝える。
+  const https = location.protocol === 'https:';
+  const sw = 'serviceWorker' in navigator;
+  const reg = sw && navigator.serviceWorker.controller;
+  box.innerHTML =
+    '<p class="note" style="margin-top:0">この ブラウザからは ボタンで おけませんでした。'+
+    '下の てじゅんで おねがいします。</p>'+
+    '<div class="kv"><span>つうしん</span><b>'+(https?'https ✓':'https でない ✗')+'</b></div>'+
+    '<div class="kv"><span>アプリの しくみ</span><b>'+(reg?'うごいている ✓':sw?'まだ ✗（一度 とじて ひらきなおす）':'つかえない ✗')+'</b></div>'+
+    '<div class="kv"><span>ビルド</span><b class="num">'+APP_BUILD+'</b></div>';
+}
+
 start();
+setTimeout(()=>{ if(installState === 'checking'){ installState = 'none'; } paintInstall(); }, 5000);
+paintInstall();
 
 // ホーム画面に「アプリ」として入れられるようにする。
 // これが無いと Chrome のメニューに インストール が出ない。
